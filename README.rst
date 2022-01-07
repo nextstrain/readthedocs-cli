@@ -146,3 +146,25 @@ From source:
     python3 -m pip install -e .
 
     rtd --version
+
+
+Automatic sync using GitHub Actions
+===================================
+
+We manage the RTD redirects for <https://docs.nextstrain.org> using a file in
+our Git repository, <https://github.com/nextstrain/docs.nextstrain.org>.  The
+redirects are automatically synced to RTD via a GitHub Actions workflow that
+uses this CLI tool.  It's a good example of how to set up something similar for
+your own project.  The pieces are:
+
+1. `redirects.yml`_ file — The redirects themselves, defined as YAML.
+
+2. `.github/workflows/sync-redirects.yaml`_ file — GitHub Actions workflow to
+   sync to RTD when *redirects.yml* changes on the ``master`` branch.
+
+3. An ``RTD_TOKEN`` `GitHub Actions secret`_ containing an `RTD API token`_.
+
+.. _redirects.yml: https://github.com/nextstrain/docs.nextstrain.org/blob/master/redirects.yml
+.. _.github/workflows/sync-redirects.yaml: https://github.com/nextstrain/docs.nextstrain.org/blob/master/.github/workflows/sync-redirects.yaml
+.. _GitHub Actions secret: https://docs.github.com/en/actions/security-guides/encrypted-secrets
+.. _RTD API token: https://readthedocs.org/accounts/tokens/
