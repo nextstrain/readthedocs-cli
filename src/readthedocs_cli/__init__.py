@@ -13,7 +13,7 @@ from typing import NamedTuple
 from urllib.parse import quote as urlescape, urljoin
 
 
-__version__ = 1
+__version__ = 2
 
 
 RTD_TOKEN = environ.get("RTD_TOKEN")
