@@ -125,8 +125,17 @@ human-centered output from any command:
       …
     ]
 
+
 Install
 =======
+
+From PyPI:
+
+.. code-block:: bash
+
+    python3 -m pip install readthedocs-cli
+
+From source:
 
 .. code-block:: bash
 
