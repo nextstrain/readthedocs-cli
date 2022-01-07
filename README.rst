@@ -129,13 +129,13 @@ human-centered output from any command:
 Install
 =======
 
-From PyPI:
+From `PyPI <https://pypi.org/project/readthedocs-cli/>`_:
 
 .. code-block:: bash
 
     python3 -m pip install readthedocs-cli
 
-From source:
+From `source <https://github.com/nextstrain/readthedocs-cli>`_:
 
 .. code-block:: bash
 
@@ -168,3 +168,33 @@ your own project.  The pieces are:
 .. _.github/workflows/sync-redirects.yaml: https://github.com/nextstrain/docs.nextstrain.org/blob/master/.github/workflows/sync-redirects.yaml
 .. _GitHub Actions secret: https://docs.github.com/en/actions/security-guides/encrypted-secrets
 .. _RTD API token: https://readthedocs.org/accounts/tokens/
+
+
+Releasing
+=========
+
+This is still a pretty informal piece of software, but it is released to
+`PyPI`_ so that we can easily install it various places.
+
+The gist of the release process is:
+
+1. Bump the ``__version__`` variable (just an integer) in
+   *src/readthedocs_cli/__init__.py*.
+
+2. Commit, tag, and push.
+
+3. Build and upload.
+
+   You'll need `build <https://pypi.org/project/build/>`_ and `twine
+   <https://pypi.org/project/twine/>`_ installed.
+
+   .. code-block:: bash
+
+       # Clear any existing build artifacts for safety
+       rm -rf dist/
+
+       # Build source tarball and platform-agnostic wheel
+       python3 -m build
+
+       # Upload both to PyPI
+       twine upload dist/*
