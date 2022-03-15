@@ -1,27 +1,19 @@
 #!/usr/bin/env python3
 import click
 import json
-import requests
 import rich.box
 import yaml
 from itertools import filterfalse, tee
-from os import environ
 from rich.console import Console as RichConsole
 from rich.table import Table as RichTable
 from rich.tree import Tree as RichTree
 from typing import NamedTuple
 from urllib.parse import quote as urlescape, urljoin
 
+from . import api
+
 
 __version__ = 2
-
-
-RTD_TOKEN = environ.get("RTD_TOKEN")
-
-ua = requests.Session()
-
-if RTD_TOKEN:
-    ua.headers["Authorization"] = f"Token {RTD_TOKEN}"
 
 
 console = RichConsole(markup = False)
@@ -57,7 +49,7 @@ def rtd_projects(ctx, name):
     # project we're looking for is in the first page), but that would only
     # impact folks with over 100 projects, which seems exceedingly rare.
     #   -trs, 15 March 2022
-    projects = GET(f"projects/", {"limit": 100})
+    projects = api.v3.projects()
 
     # List or show
     if ctx.invoked_subcommand is None:
@@ -100,7 +92,7 @@ def rtd_projects(ctx, name):
 @rtd_projects.group("redirects", invoke_without_command = True)
 @click.pass_context
 def rtd_projects_redirects(ctx):
-    redirects = sorted(GET(f"projects/{urlescape(ctx.obj.project_slug)}/redirects/", {"limit": 100}), key = RedirectKey.from_dict)
+    redirects = sorted(api.v3.project_redirects(ctx.obj.project_slug), key = RedirectKey.from_dict)
 
     # List
     if ctx.invoked_subcommand is None:
@@ -154,7 +146,7 @@ def rtd_projects_redirects_sync(ctx, file, dry_run):
         console.print(f"Creating: {r}")
 
         if not dry_run:
-            POST(f"projects/{urlescape(ctx.obj.project_slug)}/redirects/", r.to_dict())
+            api.v3.create_project_redirect(ctx.obj.project_slug, r)
 
         created.add_row(*r)
 
@@ -164,7 +156,7 @@ def rtd_projects_redirects_sync(ctx, file, dry_run):
         console.print(f"Deleting: {r} (#{pk})")
 
         if not dry_run:
-            DELETE(f"projects/{urlescape(ctx.obj.project_slug)}/redirects/{urlescape(pk)}")
+            api.v3.delete_project_redirect(ctx.obj.project_slug, pk)
 
         deleted.add_row(*r)
 
@@ -174,48 +166,6 @@ def rtd_projects_redirects_sync(ctx, file, dry_run):
     if dry_run:
         console.print("")
         console.print("No changes made in --dry-run mode.  Pass --wet-run for realsies.", style = "bold magenta")
-
-
-def GET(path, params = None):
-    url = api_url(path)
-    total = None
-    results = []
-
-    while url:
-        res = ua.get(url, params = params)
-        res.raise_for_status()
-
-        body = res.json()
-
-        if total is None:
-            total = body["count"]
-
-        if body["results"]:
-            results += body["results"]
-
-        url = body["next"]
-
-    assert len(results) == total
-
-    return results
-
-
-def POST(path, body):
-    res = ua.post(api_url(path), json = body)
-    res.raise_for_status()
-
-    return res
-
-
-def DELETE(path):
-    res = ua.delete(api_url(path))
-    res.raise_for_status()
-
-    return res
-
-
-def api_url(path):
-    return urljoin("https://readthedocs.org/api/v3/", path.lstrip("/"))
 
 
 def as_json(data):
