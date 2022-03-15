@@ -4,8 +4,8 @@ Read The Docs CLI
 
 *A work in progress.*
 
-Made to sync RTD project redirects from an authoritative YAML file kept in
-version control.  May never do anything else!
+Made to sync RTD project redirects and maintainers from authoritative files
+kept in version control.  May never do anything else!
 
 
 Synopsis
