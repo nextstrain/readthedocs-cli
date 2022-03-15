@@ -7,7 +7,7 @@ from itertools import filterfalse, tee
 from rich.console import Console as RichConsole
 from rich.table import Table as RichTable
 from rich.tree import Tree as RichTree
-from typing import NamedTuple
+from typing import List, NamedTuple
 from urllib.parse import quote as urlescape, urljoin
 
 from . import api
@@ -166,6 +166,84 @@ def rtd_projects_redirects_sync(ctx, file, dry_run):
     if dry_run:
         console.print("")
         console.print("No changes made in --dry-run mode.  Pass --wet-run for realsies.", style = "bold magenta")
+
+
+# rtd projects <name> maintainers
+@rtd_projects.group("maintainers", invoke_without_command = True)
+@click.pass_context
+def rtd_projects_maintainers(ctx):
+    maintainers = project_maintainers(ctx.obj.project_slug)
+
+    # List
+    if ctx.invoked_subcommand is None:
+        with console.pager(styles = True):
+            if ctx.obj.json:
+                console.print_json(as_json(maintainers))
+            else:
+                for u in maintainers:
+                    console.print(u)
+
+    # Subcommand context
+    else:
+        ctx.obj.maintainers = maintainers
+
+
+# rtd projects <name> maintainers sync
+@rtd_projects_maintainers.command("sync")
+@click.pass_context
+
+@click.option("-f", "--file",
+    metavar  = "<maintainers.txt>",
+    required = True,
+    help     = "File listing desired maintainers (by username)",
+    type     = click.File("r"))
+
+@click.option("--dry-run/--wet-run",
+    default = True,
+    help    = "Pretend to make changes (--dry-run, the default) or actually make changes (--wet-run)")
+
+def rtd_projects_maintainers_sync(ctx, file, dry_run):
+    if not dry_run and api.unofficial is None:
+        raise click.UsageError(f"Support for actually syncing maintainers is not installed.  Please re-install with the maintainers-sync extra, e.g. readthedocs-cli[maintainers-sync].", ctx = ctx)
+
+    existing = set(ctx.obj.maintainers)
+    desired = set(line.strip() for line in file)
+
+    to_add    = desired - existing
+    to_remove = existing - desired
+    to_keep   = existing - to_remove
+
+    for username in sorted(existing | desired):
+        if username in to_add:
+            console.print(f"+ {username}", style = "green")
+
+            if not dry_run:
+                api.unofficial.add_project_maintainer(ctx.obj.project_slug, username)
+
+        elif username in to_remove:
+            console.print(f"- {username}", style = "red")
+
+            if not dry_run:
+                api.unofficial.remove_project_maintainer(ctx.obj.project_slug, username)
+
+        else:
+            console.print(f"• {username}")
+
+    if not dry_run:
+        current = set(project_maintainers(ctx.obj.project_slug))
+        assert current == desired, f"failed to update maintainers on RTD: {current} != {desired}"
+
+    console.print()
+    console.print(f"Added ([green]+[/]) [green]{len(to_add):,}[/], removed ([red]-[/]) [red]{len(to_remove):,}[/], kept {len(to_keep):,}.", style = "bold", markup = True)
+
+    if dry_run:
+        console.print("")
+        console.print("No changes made in --dry-run mode.  Pass --wet-run for realsies.", style = "bold magenta")
+
+
+def project_maintainers(project_slug: str) -> List[str]:
+    project = api.v3.project(project_slug)
+    return sorted(u["username"] for u in project["users"])
 
 
 def as_json(data):
