@@ -93,6 +93,42 @@ Sync a project's redirects:
 
     No changes made in --dry-run mode.  Pass --wet-run for realsies.
 
+Show a project's maintainers:
+
+.. code-block:: console
+
+    $ rtd projects nextstrain maintainers
+    eharkins
+    huddlej
+    ivan.aksamentov
+    jameshadfield
+    misja
+    nextstrain
+    rneher
+    trs
+    trvrb
+    victorlin0
+
+Sync a project's maintainers:
+
+.. code-block:: console
+
+    $ rtd projects nextstrain maintainers sync -f rtd-maintainers.txt
+    - eharkins
+    • huddlej
+    • ivan.aksamentov
+    • jameshadfield
+    - misja
+    • nextstrain
+    • rneher
+    • trs
+    • trvrb
+    + victorlin0
+
+    Added (+) 1, removed (-) 2, kept 7.
+
+    No changes made in --dry-run mode.  Pass --wet-run for realsies.
+
 For automation or just the full details, ask for JSON output instead of
 human-centered output from any command:
 
