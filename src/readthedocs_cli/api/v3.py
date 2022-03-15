@@ -19,6 +19,9 @@ if RTD_TOKEN:
 def projects():
     return GET("projects/", {"limit": 100})
 
+def project(project_slug: str):
+    return GET(f"projects/{urlescape(project_slug)}/")
+
 def project_redirects(project_slug: str):
     return GET(f"projects/{urlescape(project_slug)}/redirects/", {"limit": 100})
 
@@ -31,26 +34,35 @@ def delete_project_redirect(project_slug: str, redirect_pk: str):
 
 def GET(path, params = None):
     url = api_url(path)
-    total = None
-    results = []
 
-    while url:
+    # Paged collection
+    if params and "limit" in params:
+        total = None
+        results = []
+
+        while url:
+            res = ua.get(url, params = params)
+            res.raise_for_status()
+
+            body = res.json()
+
+            if total is None:
+                total = body["count"]
+
+            if body["results"]:
+                results += body["results"]
+
+            url = body["next"]
+
+        assert len(results) == total
+
+        return results
+
+    # Single resource
+    else:
         res = ua.get(url, params = params)
         res.raise_for_status()
-
-        body = res.json()
-
-        if total is None:
-            total = body["count"]
-
-        if body["results"]:
-            results += body["results"]
-
-        url = body["next"]
-
-    assert len(results) == total
-
-    return results
+        return res.json()
 
 
 def POST(path, body):
