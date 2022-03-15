@@ -62,7 +62,7 @@ def rtd_projects(ctx, name):
     # List or show
     if ctx.invoked_subcommand is None:
         with console.pager(styles = True):
-            # Show a single project
+            # rtd projects <name> (show a single project)
             if name is not None:
                 project = next((p for p in projects if p["name"] == name), None)
 
@@ -74,7 +74,7 @@ def rtd_projects(ctx, name):
                 else:
                     console.print(f"{project['name']} <{project['urls']['documentation']}>")
 
-            # List projects
+            # rtd projects (list projects)
             else:
                 if ctx.obj.json:
                     console.print_json(as_json(projects))
@@ -96,7 +96,7 @@ def rtd_projects(ctx, name):
         ctx.obj.project_slug = next((p["slug"] for p in projects if p["name"] == name), None)
 
 
-# rtd projects redirects
+# rtd projects <name> redirects
 @rtd_projects.group("redirects", invoke_without_command = True)
 @click.pass_context
 def rtd_projects_redirects(ctx):
@@ -120,7 +120,7 @@ def rtd_projects_redirects(ctx):
         ctx.obj.redirects = redirects
 
 
-# rtd projects redirects sync
+# rtd projects <name> redirects sync
 @rtd_projects_redirects.command("sync")
 @click.pass_context
 
