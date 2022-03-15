@@ -30,6 +30,7 @@ console = RichConsole(markup = False)
 class Context:
     json: bool
     project_name: str
+    project_slug: str
     redirects: list
 
 
@@ -48,10 +49,18 @@ def rtd(ctx, json):
 @click.pass_context
 @click.argument("name", metavar = "<name>", required = False)
 def rtd_projects(ctx, name):
+    # Unfortunately we always need to get the projects so we can resolve a
+    # project name to a project slug.
+    #
+    # There's a slight optimization here where we could stop pagination early
+    # once we find the project (e.g. avoid fetching the second page if the
+    # project we're looking for is in the first page), but that would only
+    # impact folks with over 100 projects, which seems exceedingly rare.
+    #   -trs, 15 March 2022
+    projects = GET(f"projects/", {"limit": 100})
+
     # List or show
     if ctx.invoked_subcommand is None:
-        projects = GET(f"projects/", {"limit": 100})
-
         with console.pager(styles = True):
             # Show a single project
             if name is not None:
@@ -84,13 +93,14 @@ def rtd_projects(ctx, name):
     # Subcommand context
     else:
         ctx.obj.project_name = name
+        ctx.obj.project_slug = next((p["slug"] for p in projects if p["name"] == name), None)
 
 
 # rtd projects redirects
 @rtd_projects.group("redirects", invoke_without_command = True)
 @click.pass_context
 def rtd_projects_redirects(ctx):
-    redirects = sorted(GET(f"projects/{urlescape(ctx.obj.project_name)}/redirects/", {"limit": 100}), key = RedirectKey.from_dict)
+    redirects = sorted(GET(f"projects/{urlescape(ctx.obj.project_slug)}/redirects/", {"limit": 100}), key = RedirectKey.from_dict)
 
     # List
     if ctx.invoked_subcommand is None:
@@ -144,7 +154,7 @@ def rtd_projects_redirects_sync(ctx, file, dry_run):
         console.print(f"Creating: {r}")
 
         if not dry_run:
-            POST(f"projects/{urlescape(ctx.obj.project_name)}/redirects/", r.to_dict())
+            POST(f"projects/{urlescape(ctx.obj.project_slug)}/redirects/", r.to_dict())
 
         created.add_row(*r)
 
@@ -154,7 +164,7 @@ def rtd_projects_redirects_sync(ctx, file, dry_run):
         console.print(f"Deleting: {r} (#{pk})")
 
         if not dry_run:
-            DELETE(f"projects/{urlescape(ctx.obj.project_name)}/redirects/{urlescape(pk)}")
+            DELETE(f"projects/{urlescape(ctx.obj.project_slug)}/redirects/{urlescape(pk)}")
 
         deleted.add_row(*r)
 
