@@ -13,7 +13,7 @@ from urllib.parse import quote as urlescape, urljoin
 from . import api
 
 
-__version__ = 2
+__version__ = 3
 
 
 console = RichConsole(markup = False)
