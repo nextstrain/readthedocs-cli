@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 import click
 import json
+import re
 import rich.box
 import yaml
 from itertools import filterfalse, tee
+from os import environ
 from rich.console import Console as RichConsole
 from rich.table import Table as RichTable
 from rich.tree import Tree as RichTree
+from shutil import which
 from typing import List, NamedTuple
 from urllib.parse import quote as urlescape, urljoin
 
@@ -17,6 +20,31 @@ __version__ = 3
 
 
 console = RichConsole(markup = False)
+
+# RichConsole.pager() is documented to respect MANPAGER first then PAGER.  If
+# neither are set and less is available, then use it.
+PAGER = environ.get("MANPAGER", environ.get("PAGER"))
+
+if not PAGER:
+    PAGER = which("less")
+    if PAGER:
+        environ["PAGER"] = PAGER
+
+pager_is_less = bool(re.search(r"(^|/)less( |$)", PAGER))
+
+if pager_is_less:
+    # Setup less to handle styling.  Other pages won't get styles, sorry!
+    #
+    # -F is --quit-if-one-screen
+    # -K is --quit-on-intr (^C)
+    # -R is --RAW-CONTROL-CHARS (emit ANSI color escape sequences but no others (unlike -r))
+    # -X is --no-init (don't send termcap init, e.g. don't clear the screen)
+    #
+    environ.setdefault("LESS", "")
+    environ["LESS"] += "FKRX"
+    pager_styles = True
+else:
+    pager_styles = False
 
 
 class Context:
@@ -53,7 +81,7 @@ def rtd_projects(ctx, name):
 
     # List or show
     if ctx.invoked_subcommand is None:
-        with console.pager(styles = True):
+        with console.pager(styles = pager_styles):
             # rtd projects <name> (show a single project)
             if name is not None:
                 project = next((p for p in projects if p["name"] == name), None)
@@ -96,7 +124,7 @@ def rtd_projects_redirects(ctx):
 
     # List
     if ctx.invoked_subcommand is None:
-        with console.pager(styles = True):
+        with console.pager(styles = pager_styles):
             if ctx.obj.json:
                 console.print_json(as_json(redirects))
             else:
@@ -176,7 +204,7 @@ def rtd_projects_maintainers(ctx):
 
     # List
     if ctx.invoked_subcommand is None:
-        with console.pager(styles = True):
+        with console.pager(styles = pager_styles):
             if ctx.obj.json:
                 console.print_json(as_json(maintainers))
             else:
