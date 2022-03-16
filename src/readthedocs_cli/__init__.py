@@ -1,27 +1,19 @@
 #!/usr/bin/env python3
 import click
 import json
-import requests
 import rich.box
 import yaml
 from itertools import filterfalse, tee
-from os import environ
 from rich.console import Console as RichConsole
 from rich.table import Table as RichTable
 from rich.tree import Tree as RichTree
-from typing import NamedTuple
+from typing import List, NamedTuple
 from urllib.parse import quote as urlescape, urljoin
+
+from . import api
 
 
 __version__ = 2
-
-
-RTD_TOKEN = environ.get("RTD_TOKEN")
-
-ua = requests.Session()
-
-if RTD_TOKEN:
-    ua.headers["Authorization"] = f"Token {RTD_TOKEN}"
 
 
 console = RichConsole(markup = False)
@@ -30,6 +22,7 @@ console = RichConsole(markup = False)
 class Context:
     json: bool
     project_name: str
+    project_slug: str
     redirects: list
 
 
@@ -48,12 +41,20 @@ def rtd(ctx, json):
 @click.pass_context
 @click.argument("name", metavar = "<name>", required = False)
 def rtd_projects(ctx, name):
+    # Unfortunately we always need to get the projects so we can resolve a
+    # project name to a project slug.
+    #
+    # There's a slight optimization here where we could stop pagination early
+    # once we find the project (e.g. avoid fetching the second page if the
+    # project we're looking for is in the first page), but that would only
+    # impact folks with over 100 projects, which seems exceedingly rare.
+    #   -trs, 15 March 2022
+    projects = api.v3.projects()
+
     # List or show
     if ctx.invoked_subcommand is None:
-        projects = GET(f"projects/", {"limit": 100})
-
         with console.pager(styles = True):
-            # Show a single project
+            # rtd projects <name> (show a single project)
             if name is not None:
                 project = next((p for p in projects if p["name"] == name), None)
 
@@ -65,7 +66,7 @@ def rtd_projects(ctx, name):
                 else:
                     console.print(f"{project['name']} <{project['urls']['documentation']}>")
 
-            # List projects
+            # rtd projects (list projects)
             else:
                 if ctx.obj.json:
                     console.print_json(as_json(projects))
@@ -84,13 +85,14 @@ def rtd_projects(ctx, name):
     # Subcommand context
     else:
         ctx.obj.project_name = name
+        ctx.obj.project_slug = next((p["slug"] for p in projects if p["name"] == name), None)
 
 
-# rtd projects redirects
+# rtd projects <name> redirects
 @rtd_projects.group("redirects", invoke_without_command = True)
 @click.pass_context
 def rtd_projects_redirects(ctx):
-    redirects = sorted(GET(f"projects/{urlescape(ctx.obj.project_name)}/redirects/", {"limit": 100}), key = RedirectKey.from_dict)
+    redirects = sorted(api.v3.project_redirects(ctx.obj.project_slug), key = RedirectKey.from_dict)
 
     # List
     if ctx.invoked_subcommand is None:
@@ -110,7 +112,7 @@ def rtd_projects_redirects(ctx):
         ctx.obj.redirects = redirects
 
 
-# rtd projects redirects sync
+# rtd projects <name> redirects sync
 @rtd_projects_redirects.command("sync")
 @click.pass_context
 
@@ -144,7 +146,7 @@ def rtd_projects_redirects_sync(ctx, file, dry_run):
         console.print(f"Creating: {r}")
 
         if not dry_run:
-            POST(f"projects/{urlescape(ctx.obj.project_name)}/redirects/", r.to_dict())
+            api.v3.create_project_redirect(ctx.obj.project_slug, r)
 
         created.add_row(*r)
 
@@ -154,7 +156,7 @@ def rtd_projects_redirects_sync(ctx, file, dry_run):
         console.print(f"Deleting: {r} (#{pk})")
 
         if not dry_run:
-            DELETE(f"projects/{urlescape(ctx.obj.project_name)}/redirects/{urlescape(pk)}")
+            api.v3.delete_project_redirect(ctx.obj.project_slug, pk)
 
         deleted.add_row(*r)
 
@@ -166,46 +168,82 @@ def rtd_projects_redirects_sync(ctx, file, dry_run):
         console.print("No changes made in --dry-run mode.  Pass --wet-run for realsies.", style = "bold magenta")
 
 
-def GET(path, params = None):
-    url = api_url(path)
-    total = None
-    results = []
+# rtd projects <name> maintainers
+@rtd_projects.group("maintainers", invoke_without_command = True)
+@click.pass_context
+def rtd_projects_maintainers(ctx):
+    maintainers = project_maintainers(ctx.obj.project_slug)
 
-    while url:
-        res = ua.get(url, params = params)
-        res.raise_for_status()
+    # List
+    if ctx.invoked_subcommand is None:
+        with console.pager(styles = True):
+            if ctx.obj.json:
+                console.print_json(as_json(maintainers))
+            else:
+                for u in maintainers:
+                    console.print(u)
 
-        body = res.json()
-
-        if total is None:
-            total = body["count"]
-
-        if body["results"]:
-            results += body["results"]
-
-        url = body["next"]
-
-    assert len(results) == total
-
-    return results
+    # Subcommand context
+    else:
+        ctx.obj.maintainers = maintainers
 
 
-def POST(path, body):
-    res = ua.post(api_url(path), json = body)
-    res.raise_for_status()
+# rtd projects <name> maintainers sync
+@rtd_projects_maintainers.command("sync")
+@click.pass_context
 
-    return res
+@click.option("-f", "--file",
+    metavar  = "<maintainers.txt>",
+    required = True,
+    help     = "File listing desired maintainers (by username)",
+    type     = click.File("r"))
+
+@click.option("--dry-run/--wet-run",
+    default = True,
+    help    = "Pretend to make changes (--dry-run, the default) or actually make changes (--wet-run)")
+
+def rtd_projects_maintainers_sync(ctx, file, dry_run):
+    if not dry_run and api.unofficial is None:
+        raise click.UsageError(f"Support for actually syncing maintainers is not installed.  Please re-install with the maintainers-sync extra, e.g. readthedocs-cli[maintainers-sync].", ctx = ctx)
+
+    existing = set(ctx.obj.maintainers)
+    desired = set(line.strip() for line in file)
+
+    to_add    = desired - existing
+    to_remove = existing - desired
+    to_keep   = existing - to_remove
+
+    for username in sorted(existing | desired):
+        if username in to_add:
+            console.print(f"+ {username}", style = "green")
+
+            if not dry_run:
+                api.unofficial.add_project_maintainer(ctx.obj.project_slug, username)
+
+        elif username in to_remove:
+            console.print(f"- {username}", style = "red")
+
+            if not dry_run:
+                api.unofficial.remove_project_maintainer(ctx.obj.project_slug, username)
+
+        else:
+            console.print(f"• {username}")
+
+    if not dry_run:
+        current = set(project_maintainers(ctx.obj.project_slug))
+        assert current == desired, f"failed to update maintainers on RTD: {current} != {desired}"
+
+    console.print()
+    console.print(f"Added ([green]+[/]) [green]{len(to_add):,}[/], removed ([red]-[/]) [red]{len(to_remove):,}[/], kept {len(to_keep):,}.", style = "bold", markup = True)
+
+    if dry_run:
+        console.print("")
+        console.print("No changes made in --dry-run mode.  Pass --wet-run for realsies.", style = "bold magenta")
 
 
-def DELETE(path):
-    res = ua.delete(api_url(path))
-    res.raise_for_status()
-
-    return res
-
-
-def api_url(path):
-    return urljoin("https://readthedocs.org/api/v3/", path.lstrip("/"))
+def project_maintainers(project_slug: str) -> List[str]:
+    project = api.v3.project(project_slug)
+    return sorted(u["username"] for u in project["users"])
 
 
 def as_json(data):

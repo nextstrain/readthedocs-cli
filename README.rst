@@ -4,8 +4,8 @@ Read The Docs CLI
 
 *A work in progress.*
 
-Made to sync RTD project redirects from an authoritative YAML file kept in
-version control.  May never do anything else!
+Made to sync RTD project redirects and maintainers from authoritative files
+kept in version control.  May never do anything else!
 
 
 Synopsis
@@ -90,6 +90,42 @@ Sync a project's redirects:
      ──────────────────────────
 
     Created 3, deleted 0, kept 38.
+
+    No changes made in --dry-run mode.  Pass --wet-run for realsies.
+
+Show a project's maintainers:
+
+.. code-block:: console
+
+    $ rtd projects nextstrain maintainers
+    eharkins
+    huddlej
+    ivan.aksamentov
+    jameshadfield
+    misja
+    nextstrain
+    rneher
+    trs
+    trvrb
+    victorlin0
+
+Sync a project's maintainers:
+
+.. code-block:: console
+
+    $ rtd projects nextstrain maintainers sync -f rtd-maintainers.txt
+    - eharkins
+    • huddlej
+    • ivan.aksamentov
+    • jameshadfield
+    - misja
+    • nextstrain
+    • rneher
+    • trs
+    • trvrb
+    + victorlin0
+
+    Added (+) 1, removed (-) 2, kept 7.
 
     No changes made in --dry-run mode.  Pass --wet-run for realsies.
 
