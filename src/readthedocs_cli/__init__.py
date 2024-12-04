@@ -16,7 +16,7 @@ from urllib.parse import quote as urlescape, urljoin
 from . import api
 
 
-__version__ = 4
+__version__ = 5
 
 
 console = RichConsole(markup = False)
