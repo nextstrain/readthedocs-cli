@@ -1,2 +1,4 @@
 /dist/
 /src/readthedocs_cli.egg-info/
+__pycache__/
+/.venv/
